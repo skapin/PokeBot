@@ -152,7 +152,19 @@ namespace PokeBot
                         break;
                     case "part":
                         if (isTrusted && e.PrivateMessage.IsChannelMessage)
+                        {
                             Client.PartChannel(e.PrivateMessage.Source);
+                            Config.Channels = Config.Channels.Where(c => c != e.PrivateMessage.Source).ToArray();
+                            SaveConfig();
+                        }
+                        break;
+                    case "join":
+                        if (isTrusted && parameters.Length == 1)
+                        {
+                            Client.JoinChannel(parameters[0]);
+                            Config.Channels = Config.Channels.Concat(new[] { parameters[0] }).ToArray();
+                            SaveConfig();
+                        }
                         break;
                 }
             }
