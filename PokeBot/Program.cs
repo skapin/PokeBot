@@ -25,17 +25,20 @@ namespace PokeBot
         static bool EnableVoicing = true;
         static Timer VoiceTimer;
         static DateTime UntrustedRateLimit = DateTime.MinValue;
+        static string ConfigPath = "config.json";
 
         static void SaveConfig()
         {
-            File.WriteAllText("config.json", JsonConvert.SerializeObject(Config, Formatting.Indented));
+            File.WriteAllText(ConfigPath, JsonConvert.SerializeObject(Config, Formatting.Indented));
         }
 
         public static void Main(string[] args)
         {
+            if (args.Length != 0)
+                ConfigPath = args[0];
             Config = new Config();
-            if (File.Exists("config.json"))
-                JsonConvert.PopulateObject(File.ReadAllText("config.json"), Config);
+            if (File.Exists(ConfigPath))
+                JsonConvert.PopulateObject(File.ReadAllText(ConfigPath), Config);
             else
             {
                 SaveConfig();
@@ -88,6 +91,7 @@ namespace PokeBot
                 return;
             lock (VoiceLock)
             {
+                Client.SendRawMessage("NOTICE {0} :{1}", e.User.Nick, "Hi " + e.User.Nick + "! Hang in there, you'll be allowed to talk in a few moments.");
                 AwaitingVoice.Add(new PendingVoice
                 {
                     User = e.User,
