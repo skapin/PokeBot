@@ -3,12 +3,18 @@ Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PokeBot", "PokeBot\PokeBot.csproj", "{6A6AC69F-79A6-4D46-AD27-527A40AA3740}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChatSharp", "externals\ChatSharp\ChatSharp\ChatSharp.csproj", "{4033AFFA-BEA3-4BDF-84EA-59A23360FD36}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4033AFFA-BEA3-4BDF-84EA-59A23360FD36}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4033AFFA-BEA3-4BDF-84EA-59A23360FD36}.Debug|x86.Build.0 = Debug|Any CPU
+		{4033AFFA-BEA3-4BDF-84EA-59A23360FD36}.Release|x86.ActiveCfg = Release|Any CPU
+		{4033AFFA-BEA3-4BDF-84EA-59A23360FD36}.Release|x86.Build.0 = Release|Any CPU
 		{6A6AC69F-79A6-4D46-AD27-527A40AA3740}.Debug|x86.ActiveCfg = Debug|x86
 		{6A6AC69F-79A6-4D46-AD27-527A40AA3740}.Debug|x86.Build.0 = Debug|x86
 		{6A6AC69F-79A6-4D46-AD27-527A40AA3740}.Release|x86.ActiveCfg = Release|x86
