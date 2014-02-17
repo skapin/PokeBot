@@ -140,7 +140,7 @@ namespace PokeBot
                         {
                             if (int.TryParse(parameters[0], out Config.WaitTime))
                             {
-                                lock (AwaitingVoice)
+                                lock (VoiceLock)
                                 {
                                     Client.SendMessage(string.Format("Wait time set to {0} seconds. Dropped {1} users from the queue.", 
                                         Config.WaitTime, AwaitingVoice.Count), e.PrivateMessage.Source);
@@ -164,6 +164,44 @@ namespace PokeBot
                             Client.JoinChannel(parameters[0]);
                             Config.Channels = Config.Channels.Concat(new[] { parameters[0] }).ToArray();
                             SaveConfig();
+                        }
+                        break;
+                    case "voiceall":
+                        if (isTrusted && e.PrivateMessage.IsChannelMessage)
+                        {
+                            lock (VoiceLock)
+                            {
+                                AwaitingVoice.Clear();
+                                VoiceTimer.Change(Timeout.Infinite, Timeout.Infinite);
+                                var users = Client.Channels[e.PrivateMessage.Source].Users.ToArray();
+                                for (int i = 0; i < users.Length; i += 4)
+                                {
+                                    string change = string.Empty;
+                                    var round = users.Skip(i).Take(4).ToArray();
+                                    while (change.Length < round.Length)
+                                        change += "v";
+                                    Client.ChangeMode(e.PrivateMessage.Source, "+" + change + " " + string.Join(" ", round.Select(u => u.Nick)));
+                                }
+                            }
+                        }
+                        break;
+                    case "devoiceall":
+                        if (isTrusted && e.PrivateMessage.IsChannelMessage)
+                        {
+                            lock (VoiceLock)
+                            {
+                                AwaitingVoice.Clear();
+                                VoiceTimer.Change(Timeout.Infinite, Timeout.Infinite);
+                                var users = Client.Channels[e.PrivateMessage.Source].Users.ToArray();
+                                for (int i = 0; i < users.Length; i += 4)
+                                {
+                                    string change = string.Empty;
+                                    var round = users.Skip(i).Take(4).ToArray();
+                                    while (change.Length < round.Length)
+                                        change += "v";
+                                    Client.ChangeMode(e.PrivateMessage.Source, "-" + change + " " + string.Join(" ", round.Select(u => u.Nick)));
+                                }
+                            }
                         }
                         break;
                 }
