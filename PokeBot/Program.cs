@@ -24,6 +24,7 @@ namespace PokeBot
         static object VoiceLock = new object();
         static bool EnableVoicing = true;
         static Timer VoiceTimer;
+        static DateTime UntrustedRateLimit = DateTime.MinValue;
 
         static void SaveConfig()
         {
@@ -119,21 +120,39 @@ namespace PokeBot
                 bool isTrusted = false;
                 if (Config.TrustedMasks.Any(m => e.PrivateMessage.User.Match(m)))
                     isTrusted = true;
+                if (!isTrusted && (DateTime.Now - UntrustedRateLimit).TotalSeconds < 3)
+                    return;
+                UntrustedRateLimit = DateTime.Now;
                 switch (command)
                 {
                     case "ping":
-                        Client.SendMessage("Pong!", e.PrivateMessage.Source);
+                        Client.SendMessage(e.PrivateMessage.User.Nick + ": Pong!", e.PrivateMessage.Source);
                         break;
                     case "voice":
                         if (isTrusted)
+                        {
                             EnableVoicing = !EnableVoicing;
+                            Client.SendMessage("Set auto-voicing to " + EnableVoicing, e.PrivateMessage.Source);
+                        }
                         break;
                     case "wait":
                         if (isTrusted && parameters.Length == 1)
                         {
                             if (int.TryParse(parameters[0], out Config.WaitTime))
-                                Client.SendMessage("Wait time set.", e.PrivateMessage.Source);
+                            {
+                                lock (AwaitingVoice)
+                                {
+                                    Client.SendMessage(string.Format("Wait time set to {0} seconds. Dropped {1} users from the queue.", 
+                                        Config.WaitTime, AwaitingVoice.Count), e.PrivateMessage.Source);
+                                    AwaitingVoice.Clear();
+                                }
+                                SaveConfig();
+                            }
                         }
+                        break;
+                    case "part":
+                        if (isTrusted && e.PrivateMessage.IsChannelMessage)
+                            Client.PartChannel(e.PrivateMessage.Source);
                         break;
                 }
             }
