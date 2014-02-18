@@ -19,6 +19,14 @@ namespace PokeBot
             public string Channel { get; set; }
         }
 
+        private class MutePoll
+        {
+            public string Nick { get; set; }
+            public int Votes { get; set; }
+            public DateTime Expires { get; set; }
+            public List<string> Voters { get; set; }
+        }
+
         static Config Config;
         static IrcClient Client;
         static List<PendingVoice> AwaitingVoice = new List<PendingVoice>();
@@ -27,6 +35,8 @@ namespace PokeBot
         static Timer VoiceTimer;
         static DateTime UntrustedRateLimit = DateTime.MinValue;
         static string ConfigPath = "config.json";
+        static List<MutePoll> MutePolls;
+        static string PrimaryChannel;
 
         static void SaveConfig()
         {
@@ -55,20 +65,11 @@ namespace PokeBot
             Client.ModeChanged += HandleModeChanged;
             Client.UserJoinedChannel += HandleUserJoinedChannel;
             Client.UserKicked += (sender, e) => Client.JoinChannel(e.Channel.Name);
-            Client.UserPartedChannel += HandleUserPartedChannel;
+            Client.Settings.WhoIsOnConnect = false;
             VoiceTimer = new Timer(DoVoicing);
+            MutePolls = new List<MutePoll>();
             Client.ConnectAsync();
             while (true) Thread.Sleep(100);
-        }
-
-        static void HandleUserPartedChannel(object sender, ChannelUserEventArgs e)
-        {
-            lock (VoiceLock)
-            {
-                var user = AwaitingVoice.SingleOrDefault(a => a.User.Nick == e.User.Nick);
-                if (user != null)
-                    AwaitingVoice.Remove(user);
-            }
         }
 
         static void DoVoicing(object discarded)
@@ -114,7 +115,7 @@ namespace PokeBot
         {
             if (e.PrivateMessage.Message.StartsWith("."))
             {
-                var command = e.PrivateMessage.Message.Substring(1);
+                var command = e.PrivateMessage.Message.Substring(1).Trim();
                 string[] parameters = new string[0];
                 if (command.Contains(" "))
                 {
@@ -213,12 +214,77 @@ namespace PokeBot
                         if (isTrusted)
                             Process.GetCurrentProcess().Kill();
                         break;
+                    case "source":
+                        Client.SendMessage("https://github.com/SirCmpwn/PokeBot", e.PrivateMessage.Source);
+                        break;
+                    case "votelimit":
+                        if (isTrusted && parameters.Length == 1)
+                        {
+                            if (int.TryParse(parameters[0], out Config.VoteThreshold))
+                                Client.SendMessage("Set vote threshold to " + Config.VoteThreshold, e.PrivateMessage.Source);
+                        }
+                        break;
+                    case "queue":
+                        if (isTrusted)
+                            Client.SendMessage("Current queue length is " + AwaitingVoice.Count, e.PrivateMessage.Source);
+                        break;
+                    case "votemute":
+                        if (parameters.Length != 1)
+                            Client.SendMessage("Usage: .votemute <username>", e.PrivateMessage.Source);
+                        else
+                        {
+                            var target = Client.Channels[PrimaryChannel].Users.SingleOrDefault(u => u.Nick.Equals(parameters[0], StringComparison.InvariantCultureIgnoreCase));
+                            if (target == null)
+                                Client.SendMessage("That person is not here.", e.PrivateMessage.Source);
+                            else if (target.Nick == Client.User.Nick)
+                                Client.SendMessage("Hahaha nice try", e.PrivateMessage.Source);
+                            else if (AwaitingVoice.Any(v => v.User.Nick == target.Nick))
+                                Client.SendMessage("That person is already muted.", e.PrivateMessage.Source);
+                            else
+                            {
+                                var poll = MutePolls.SingleOrDefault(p => p.Nick == target.Nick);
+                                if (poll == null)
+                                {
+                                    poll = new MutePoll { Nick = target.Nick, Expires = DateTime.Now.AddMinutes(10), Voters = new List<string>() };
+                                    MutePolls.Add(poll);
+                                }
+                                if (poll.Voters.Contains(e.PrivateMessage.User.Hostname))
+                                    Client.SendMessage("You have already voted to mute this person.", e.PrivateMessage.Source);
+                                else
+                                {
+                                    Client.SendMessage("Your vote has been noted.", e.PrivateMessage.Source);
+                                    poll.Voters.Add(e.PrivateMessage.User.Hostname);
+                                    if (DateTime.Now > poll.Expires)
+                                        poll.Votes = 0;
+                                    poll.Votes++;
+                                    poll.Expires = DateTime.Now.AddMinutes(10);
+                                    if (poll.Votes >= Config.VoteThreshold)
+                                    {
+                                        Client.ChangeMode(PrimaryChannel, "-v " + poll.Nick);
+                                        Client.SendMessage("You have been muted in " + PrimaryChannel +
+                                            ". You will be unmuted soon, and I suggest you get your act together in the meantime.", target.Nick);
+                                        MutePolls.Remove(poll);
+                                        lock (VoiceLock)
+                                        {
+                                            AwaitingVoice.Add(new PendingVoice
+                                            {
+                                                User = target,
+                                                ScheduledVoice = DateTime.Now.AddMinutes(30),
+                                                Channel = PrimaryChannel
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        break;
                 }
             }
         }
 
         static void HandleConnectionComplete(object sender, EventArgs e)
         {
+            PrimaryChannel = Config.Channels.FirstOrDefault();
             foreach (var channel in Config.Channels)
                 Client.JoinChannel(channel);
             VoiceTimer.Change(1000, 1000);

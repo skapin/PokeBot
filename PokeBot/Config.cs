@@ -8,10 +8,12 @@ namespace PokeBot
         public string[] Channels;
         public string[] TrustedMasks;
         public int WaitTime;
+        public int VoteThreshold;
 
         public Config()
         {
             WaitTime = 20;
+            VoteThreshold = 10;
         }
     }
 }
