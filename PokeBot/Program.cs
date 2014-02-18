@@ -164,6 +164,9 @@ namespace PokeBot
                             SaveConfig();
                         }
                         break;
+                    case "help":
+                        Client.SendMessage("https://github.com/SirCmpwn/PokeBot/blob/master/README.md", e.PrivateMessage.Source);
+                        break;
                     case "join":
                         if (isTrusted && parameters.Length == 1)
                         {
