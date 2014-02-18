@@ -1,6 +1,7 @@
-PokeBot keeps an eye on #twitchplayspokemon. Here's how you can use it:
+PokeBot keeps an eye on #twitchplayspokemon. You can say any of these
+commands in the channel to use them:
 
-* **.votemute <username>**: Votes to mute an abusive user.
+* **.votemute \<username>**: Votes to mute an abusive user.
 * **.source**: Link to the source code
 * **.help**: Link to this page
 * **.ping**: Pong
