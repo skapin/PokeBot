@@ -6,6 +6,7 @@ using ChatSharp.Events;
 using System.Threading;
 using System.Linq;
 using System.Collections.Generic;
+using System.Diagnostics;
 
 namespace PokeBot
 {
@@ -207,6 +208,10 @@ namespace PokeBot
                                 }
                             }
                         }
+                        break;
+                    case "restart":
+                        if (isTrusted)
+                            Process.GetCurrentProcess().Kill();
                         break;
                 }
             }
