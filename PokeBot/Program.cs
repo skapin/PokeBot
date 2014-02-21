@@ -231,6 +231,37 @@ namespace PokeBot
                         if (isTrusted)
                             Client.SendMessage("Current queue length is " + AwaitingVoice.Count, e.PrivateMessage.Source);
                         break;
+					case "mute":
+						if (isTrusted && parameters.Length == 2)
+						{
+							int duration;
+							if (int.TryParse(parameters[1], out duration))
+							{
+								var target = Client.Channels[PrimaryChannel].Users.SingleOrDefault(u => u.Nick.Equals(parameters[0], StringComparison.InvariantCultureIgnoreCase));
+								if (target == null)
+									Client.SendMessage("That person isn't here.", e.PrivateMessage.Source);
+								else if (duration < 1)
+									Client.SendMessage("1 or more minutes, please.", e.PrivateMessage.Source);
+								else
+								{
+									Client.ChangeMode(PrimaryChannel, "-v " + target.Nick);
+		                            lock (VoiceLock)
+		                            {
+		                                AwaitingVoice.Add(new PendingVoice
+		                                {
+		                                    User = target,
+		                                    ScheduledVoice = DateTime.Now.AddMinutes(duration),
+		                                    Channel = PrimaryChannel
+		                                });
+		                            }
+								}
+							}
+							else
+							{
+								Client.SendMessage("Usage: .mute <username> <minutes>", e.PrivateMessage.Source);
+							}
+						}
+						break;
                     case "votemute":
                         if (parameters.Length != 1)
                             Client.SendMessage("Usage: .votemute <username>", e.PrivateMessage.Source);
