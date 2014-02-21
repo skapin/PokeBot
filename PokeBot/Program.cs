@@ -4,13 +4,14 @@ using Newtonsoft.Json;
 using ChatSharp;
 using ChatSharp.Events;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Linq;
 using System.Collections.Generic;
 using System.Diagnostics;
 
 namespace PokeBot
 {
-    class Program
+    static class Program
     {
         private class PendingVoice
         {
@@ -119,7 +120,7 @@ namespace PokeBot
                 string[] parameters = new string[0];
                 if (command.Contains(" "))
                 {
-                    parameters = command.Substring(command.IndexOf(" ") + 1).Split(' ');
+                    parameters = command.Substring(command.IndexOf(" ") + 1).SafeSplit(' ').Select(s => s.Trim('\"')).ToArray();
                     command = command.Remove(command.IndexOf(" "));
                 }
                 command = command.ToLower();
@@ -312,8 +313,326 @@ namespace PokeBot
                             }
                         }
                         break;
+                    case "livehelp":
+                        if (isTrusted)
+                            Client.SendMessage("http://tpp.aninext.tv/commands.html", e.PrivateMessage.Source);
+                        break;
+                    case "money":
+                        if (isTrusted)
+                        {
+                            if (parameters.Length != 1)
+                                Client.SendMessage("RTFM", e.PrivateMessage.Source);
+                            else
+                            {
+                                int balance;
+                                if (!int.TryParse(parameters[0], out balance))
+                                    Client.SendMessage("Numbers only, moron", e.PrivateMessage.Source);
+                                else
+                                {
+                                    var updates = GetUpdates();
+                                    updates.balance = balance;
+                                    SaveUpdates(updates, e.PrivateMessage.User.Nick);
+                                    Client.SendMessage("Updated.", e.PrivateMessage.Source);
+                                }
+                            }
+                        }
+                        break;
+                    case "update":
+                        if (isTrusted)
+                        {
+                            if (parameters.Length < 2 || parameters.Length > 4)
+                                Client.SendMessage("RTFM", e.PrivateMessage.Source);
+                            else
+                            {
+                                var updates = GetUpdates();
+                                var update = new LiveUpdates.Update();
+                                var categories = new string[] { "Travel", "Roster", "Items", "Battle", "Commentary", "Meta" };
+                                var category = categories.SingleOrDefault(s => s.Equals(parameters[0], StringComparison.InvariantCultureIgnoreCase));
+                                if (category == null)
+                                    Client.SendMessage("Valid categories: " + string.Join(", ", categories), e.PrivateMessage.Source);
+                                update.category = category;
+                                update.title = parameters[1];
+                                if (parameters.Length > 2)
+                                    update.description = parameters[2];
+                                try
+                                {
+                                    if (parameters.Length > 3)
+                                        update.time = GetTime(parameters[3]);
+                                    else
+                                        update.time = GetTime(DateTime.UtcNow);
+                                }
+                                catch
+                                {
+                                    Client.SendMessage("Invalid time.", e.PrivateMessage.Source);
+                                    break;
+                                }
+                                updates.updates = updates.updates.Concat(new[] { update }).OrderByDescending(u => u.time).ToArray();
+                                SaveUpdates(updates, e.PrivateMessage.User.Nick);
+                                Client.SendMessage("Site updated. Use .undo " + update.time + " to undo that.", e.PrivateMessage.Source);
+                            }
+                        }
+                        break;
+                    case "undo":
+                        if (isTrusted)
+                        {
+                            if (parameters.Length != 1)
+                                Client.SendMessage("RTFM", e.PrivateMessage.Source);
+                            else
+                            {
+                                int time;
+                                if (!int.TryParse(parameters[0], out time))
+                                    Client.SendMessage("RTFM", e.PrivateMessage.Source);
+                                else
+                                {
+                                    var updates = GetUpdates();
+                                    updates.updates = updates.updates.Where(u => u.time != time).OrderByDescending(u => u.time).ToArray();
+                                    SaveUpdates(updates, e.PrivateMessage.User.Nick);
+                                    Client.SendMessage("Undone. Try to screw up less, please.", e.PrivateMessage.Source);
+                                }
+                            }
+                        }
+                        break;
+                    case "levelup":
+                        if (isTrusted)
+                        {
+                            if (parameters.Length != 1)
+                                Client.SendMessage("RTFM", e.PrivateMessage.Source);
+                            else
+                            {
+                                var updates = GetUpdates();
+                                var pokemon = updates.party.SingleOrDefault(p => 
+                                    p.name.Equals(parameters[0], StringComparison.InvariantCultureIgnoreCase) ||
+                                    p.nickname.Equals(parameters[0], StringComparison.InvariantCultureIgnoreCase) ||
+                                    p.species.Equals(parameters[0], StringComparison.InvariantCultureIgnoreCase));
+                                if (pokemon == null)
+                                    Client.SendMessage("That Pokemon isn't in our party, you moron", e.PrivateMessage.Source);
+                                else
+                                {
+                                    pokemon.level++;
+                                    SaveUpdates(updates, e.PrivateMessage.User.Nick);
+                                    Client.SendMessage("Done. " + parameters[0] + " is level " + pokemon.level + " now.", e.PrivateMessage.Source);
+                                }
+                            }
+                        }
+                        break;
+                    case "goal":
+                        if (isTrusted)
+                        {
+                            if (parameters.Length != 1)
+                                Client.SendMessage("RTFM", e.PrivateMessage.Source);
+                            else
+                            {
+                                var updates = GetUpdates();
+                                updates.goal = parameters[0];
+                                SaveUpdates(updates, e.PrivateMessage.User.Nick);
+                                Client.SendMessage("Updated goal.", e.PrivateMessage.Source);
+                            }
+                        }
+                        break;
+                    case "catch":
+                        if (isTrusted)
+                        {
+                            if (parameters.Length != 4)
+                                Client.SendMessage("RTFM", e.PrivateMessage.Source);
+                            else
+                            {
+                                var updates = GetUpdates();
+                                try
+                                {
+                                    var mon = new LiveUpdates.Pokemon();
+                                    mon.species = parameters[0];
+                                    mon.level = int.Parse(parameters[1]);
+                                    mon.name = parameters[2];
+                                    mon.nickname = parameters[3];
+                                    updates.party = updates.party.Concat(new[] { mon }).ToArray();
+                                }
+                                catch
+                                {
+                                    Client.SendMessage("RTFM", e.PrivateMessage.Source);
+                                    break;
+                                }
+                                SaveUpdates(updates, e.PrivateMessage.User.Nick);
+                                Client.SendMessage("Added Pokemon.", e.PrivateMessage.Source);
+                            }
+                        }
+                        break;
+                    case "release":
+                        if (isTrusted)
+                        {
+                            if (parameters.Length != 1)
+                                Client.SendMessage("RTFM", e.PrivateMessage.Source);
+                            else
+                            {
+                                var updates = GetUpdates();
+                                var pokemon = updates.party.SingleOrDefault(p => 
+                                                                            p.name.Equals(parameters[0], StringComparison.InvariantCultureIgnoreCase) ||
+                                                                            p.nickname.Equals(parameters[0], StringComparison.InvariantCultureIgnoreCase) ||
+                                                                            p.species.Equals(parameters[0], StringComparison.InvariantCultureIgnoreCase));
+                                if (pokemon == null)
+                                    Client.SendMessage("That Pokemon isn't in our party, you moron", e.PrivateMessage.Source);
+                                else
+                                {
+                                    updates.party = updates.party.Where(p => p != pokemon).ToArray();
+                                    SaveUpdates(updates, e.PrivateMessage.User.Nick);
+                                    Client.SendMessage("Removed Pokemon.", e.PrivateMessage.Source);
+                                }
+                            }
+                        }
+                        break;
+                    case "learn":
+                        if (isTrusted)
+                        {
+                            if (parameters.Length != 2)
+                                Client.SendMessage("RTFM", e.PrivateMessage.Source);
+                            else
+                            {
+                                var updates = GetUpdates();
+                                var pokemon = updates.party.SingleOrDefault(p => 
+                                                                            p.name.Equals(parameters[0], StringComparison.InvariantCultureIgnoreCase) ||
+                                                                            p.nickname.Equals(parameters[0], StringComparison.InvariantCultureIgnoreCase) ||
+                                                                            p.species.Equals(parameters[0], StringComparison.InvariantCultureIgnoreCase));
+                                if (pokemon == null)
+                                    Client.SendMessage("That Pokemon isn't in our party, you moron", e.PrivateMessage.Source);
+                                else
+                                {
+                                    if (pokemon.moves == null)
+                                        pokemon.moves = new string[0];
+                                    pokemon.moves = pokemon.moves.Concat(new[] { parameters[1] }).ToArray();
+                                    SaveUpdates(updates, e.PrivateMessage.User.Nick);
+                                    Client.SendMessage("Done.", e.PrivateMessage.Source);
+                                }
+                            }
+                        }
+                        break;
+                    case "pickup":
+                        if (isTrusted)
+                        {
+                            if (parameters.Length != 1)
+                                Client.SendMessage("RTFM", e.PrivateMessage.Source);
+                            else
+                            {
+                                var updates = GetUpdates();
+                                var item = updates.inventory.SingleOrDefault(i => i.name.Equals(parameters[0], StringComparison.InvariantCultureIgnoreCase));
+                                if (item == null)
+                                {
+                                    item = new LiveUpdates.Item { count = 0, name = parameters[0] };
+                                    updates.inventory = updates.inventory.Concat(new[] { item }).ToArray();
+                                }
+                                item.count++;
+                                SaveUpdates(updates, e.PrivateMessage.User.Nick);
+                                Client.SendMessage("Done.", e.PrivateMessage.Source);
+                            }
+                        }
+                        break;
+                    case "drop":
+                        if (isTrusted)
+                        {
+                            if (parameters.Length != 1)
+                                Client.SendMessage("RTFM", e.PrivateMessage.Source);
+                            else
+                            {
+                                var updates = GetUpdates();
+                                var item = updates.inventory.SingleOrDefault(i => i.name.Equals(parameters[0], StringComparison.InvariantCultureIgnoreCase));
+                                if (item == null)
+                                {
+                                    Client.SendMessage("We don't have that item.", e.PrivateMessage.Source);
+                                    break;
+                                }
+                                item.count--;
+                                if (item.count == 0)
+                                    updates.inventory = updates.inventory.Where(i => i != item).ToArray();
+                                SaveUpdates(updates, e.PrivateMessage.User.Nick);
+                                Client.SendMessage("Done.", e.PrivateMessage.Source);
+                            }
+                        }
+                        break;
+                    case "forget":
+                        if (isTrusted)
+                        {
+                            if (parameters.Length != 2)
+                                Client.SendMessage("RTFM", e.PrivateMessage.Source);
+                            else
+                            {
+                                var updates = GetUpdates();
+                                var pokemon = updates.party.SingleOrDefault(p => 
+                                                                            p.name.Equals(parameters[0], StringComparison.InvariantCultureIgnoreCase) ||
+                                                                            p.nickname.Equals(parameters[0], StringComparison.InvariantCultureIgnoreCase) ||
+                                                                            p.species.Equals(parameters[0], StringComparison.InvariantCultureIgnoreCase));
+                                if (pokemon == null)
+                                    Client.SendMessage("That Pokemon isn't in our party, you moron", e.PrivateMessage.Source);
+                                else
+                                {
+                                    if (pokemon.moves == null)
+                                        pokemon.moves = new string[0];
+                                    var move = pokemon.moves.SingleOrDefault(p => p.Equals(parameters[1], StringComparison.InvariantCultureIgnoreCase));
+                                    if (move == null)
+                                    {
+                                        Client.SendMessage(pokemon.name + " does not know " + parameters[1], e.PrivateMessage.Source);
+                                        break;
+                                    }
+                                    pokemon.moves = pokemon.moves.Where(m => m != move).ToArray();
+                                    SaveUpdates(updates, e.PrivateMessage.User.Nick);
+                                    Client.SendMessage("Done.", e.PrivateMessage.Source);
+                                }
+                            }
+                        }
+                        break;
+                    case "badge":
+                        if (isTrusted)
+                        {
+                            if (parameters.Length != 1)
+                                Client.SendMessage("RTFM", e.PrivateMessage.Source);
+                            else
+                            {
+                                var updates = GetUpdates();
+                                updates.badges = updates.badges.Concat(new [] { parameters[0].ToLower() }).ToArray();
+                                SaveUpdates(updates, e.PrivateMessage.User.Nick);
+                                Client.SendMessage("Done.", e.PrivateMessage.Source);
+                            }
+                        }
+                        break;
                 }
             }
+        }
+
+        static readonly int TPPStart = 1392254507;
+
+        static int GetTime(DateTime when)
+        {
+            return (int)(when - new DateTime(1970, 1, 1, 0, 0, 0, 0)).TotalSeconds;
+        }
+
+        static int GetTime(string when)
+        {
+            int seconds = 0;
+            var parts = when.Split('d', 'h', 'm', 's');
+            seconds += int.Parse(parts[0]) * (60 * 60 * 24);
+            seconds += int.Parse(parts[1]) * (60 * 60);
+            seconds += int.Parse(parts[2]) * 60;
+            seconds += int.Parse(parts[3]);
+            return seconds + TPPStart;
+        }
+
+        static LiveUpdates GetUpdates()
+        {
+            var info = new ProcessStartInfo("git", "pull");
+            info.WorkingDirectory = Config.UpdatePath;
+            Process.Start(info).WaitForExit();
+            return JsonConvert.DeserializeObject<LiveUpdates>(File.ReadAllText(Path.Combine(Config.UpdatePath, "feed.json")));
+        }
+
+        static void SaveUpdates(LiveUpdates foo, string user)
+        {
+            File.WriteAllText(Path.Combine(Config.UpdatePath, "feed.json"), JsonConvert.SerializeObject(foo, Formatting.Indented));
+            Task.Factory.StartNew(() =>
+            {
+                var info = new ProcessStartInfo("git", "commit -am \"Update on behalf of " + user + "\"");
+                info.WorkingDirectory = Config.UpdatePath;
+                Process.Start(info).WaitForExit();
+                info = new ProcessStartInfo("git", "push");
+                info.WorkingDirectory = Config.UpdatePath;
+                Process.Start(info).WaitForExit();
+            });
         }
 
         static void HandleConnectionComplete(object sender, EventArgs e)
@@ -322,6 +641,40 @@ namespace PokeBot
             foreach (var channel in Config.Channels)
                 Client.JoinChannel(channel);
             VoiceTimer.Change(1000, 1000);
+        }
+
+        public static string[] SafeSplit(this string value, params char[] characters)
+        {
+            string[] result = new string[1];
+            result[0] = "";
+            bool inString = false, inChar = false;
+            for (int i = 0; i < value.Length; i++)
+            {
+                bool foundChar = false;
+                if (!inString && !inChar)
+                {
+                    foreach (char haystack in characters)
+                    {
+                        if (value[i] == haystack)
+                        {
+                            foundChar = true;
+                            result = result.Concat(new [] { "" }).ToArray();
+                            break;
+                        }
+                    }
+                }
+                if (!foundChar)
+                {
+                    result[result.Length - 1] += value[i];
+                    if (value[i] == '"' && !inChar)
+                        inString = !inString;
+                    if (value[i] == '\'' && !inString)
+                        inChar = !inChar;
+                    if (value[i] == '\\')
+                        result[result.Length - 1] += value[++i];
+                }
+            }
+            return result;
         }
     }
 }

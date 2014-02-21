@@ -9,11 +9,13 @@ namespace PokeBot
         public string[] TrustedMasks;
         public int WaitTime;
         public int VoteThreshold;
+        public string UpdatePath { get; set; }
 
         public Config()
         {
             WaitTime = 20;
             VoteThreshold = 10;
+            UpdatePath = null;
         }
     }
 }
