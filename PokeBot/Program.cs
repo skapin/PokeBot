@@ -70,7 +70,8 @@ namespace PokeBot
             VoiceTimer = new Timer(DoVoicing);
             MutePolls = new List<MutePoll>();
             Client.ConnectAsync();
-            while (true) Thread.Sleep(100);
+            while (true)
+                Client.SendRawMessage(Console.ReadLine());
         }
 
         static void DoVoicing(object discarded)
